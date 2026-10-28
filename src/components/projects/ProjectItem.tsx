@@ -90,6 +90,7 @@ export default function ProjectItem({ project, index }: ProjectItemProps) {
         title={project.title}
         number={project.number}
         imageSrc={project.imageSrc}
+        imageAlt={project.imageAlt}
       />
     </div>
   );

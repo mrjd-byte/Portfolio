@@ -1171,7 +1171,7 @@ export default function HeroIllustration() {
       {/* Technical Annotation Callouts (Editorial Notebook Style) */}
 
       {/* 1. Upper-left Callout Box */}
-      <div className="absolute top-2 left-0 sm:left-4 z-10 border border-[#28251F]/25 bg-[#F3EBDD]/90 backdrop-blur-xs px-2.5 py-2 font-mono text-[9px] sm:text-[10px] leading-tight tracking-[0.16em] uppercase text-[#28251F]/80 pointer-events-none">
+      <div className="absolute top-2 left-0 sm:left-4 z-10 border border-[#28251F]/25 bg-[#F3EBDD]/90 backdrop-blur-xs px-2.5 py-2 font-mono text-[9px] sm:text-[10px] leading-tight tracking-[0.16em] uppercase text-[#28251F]/80 pointer-events-none text-left">
         <div>IDEAS</div>
         <div>SYSTEMS</div>
         <div>PEOPLE</div>
@@ -1179,7 +1179,7 @@ export default function HeroIllustration() {
       </div>
 
       {/* 2. Top-right Technical Category Listing */}
-      <div className="absolute top-2 right-0 sm:right-4 z-10 font-mono text-[9px] sm:text-[10px] leading-relaxed tracking-[0.16em] uppercase text-[#28251F]/70 text-right pointer-events-none">
+      <div className="absolute top-2 right-0 sm:right-4 z-10 border border-[#28251F]/25 bg-[#F3EBDD]/90 backdrop-blur-xs px-2.5 py-2 font-mono text-[9px] sm:text-[10px] leading-tight tracking-[0.16em] uppercase text-[#28251F]/80 text-right pointer-events-none">
         <div>ALGORITHMS</div>
         <div>SYSTEM DESIGN</div>
         <div>FULL-STACK</div>
@@ -1188,7 +1188,7 @@ export default function HeroIllustration() {
       </div>
 
       {/* 3. Lower-left Code Comment Annotation */}
-      <div className="absolute bottom-6 left-0 sm:left-4 z-10 font-mono text-[9px] sm:text-[10px] leading-tight tracking-[0.16em] uppercase text-[#28251F]/65 pointer-events-none">
+      <div className="absolute bottom-6 left-0 sm:left-4 z-10 border border-[#28251F]/25 bg-[#F3EBDD]/90 backdrop-blur-xs px-2.5 py-2 font-mono text-[9px] sm:text-[10px] leading-tight tracking-[0.16em] uppercase text-[#28251F]/80 pointer-events-none text-left">
         <div className="text-[#6B7C69]">//</div>
         <div>BUILD</div>
         <div>LEARN</div>

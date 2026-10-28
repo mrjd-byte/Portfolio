@@ -10,9 +10,9 @@ export default function Header() {
         <Link
           href="/"
           className="font-mono text-[11px] sm:text-xs tracking-[0.22em] uppercase font-medium text-[#28251F] select-none hover:opacity-80 transition-opacity focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-[#28251F]/40 rounded-xs"
-          aria-label="J. / PORTFOLIO — Home"
+          aria-label="JD / PORTFOLIO — Home"
         >
-          J. / PORTFOLIO
+          JD / PORTFOLIO
         </Link>
         <div className="font-mono text-[11px] sm:text-xs tracking-[0.15em] text-[#28251F] select-none">
           {displayYear}

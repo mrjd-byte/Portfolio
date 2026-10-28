@@ -33,5 +33,6 @@ export interface Project {
   liveUrl?: string;
   visualType: "debatehub" | "memory-allocator" | "placeholder" | string;
   imageSrc?: string;
+  imageAlt?: string;
   isPlaceholder?: boolean;
 }

@@ -12,9 +12,9 @@ export const projects: Project[] = [
     repositoryUrl: "",
     liveUrl: "",
     visualType: "debatehub",
-    // Optional screenshot path from public/images/projects/ (e.g. "/images/projects/debatehub.png")
-    // When left empty, the fallback architectural illustration is rendered
-    imageSrc: "",
+    // Screenshot path in public/images/projects/
+    imageSrc: "/images/projects/debatehub.png",
+    imageAlt: "DebateHub debate platform interface",
     isPlaceholder: false,
   },
   {
@@ -33,16 +33,17 @@ export const projects: Project[] = [
     repositoryUrl: "https://github.com/mrjd-byte/Custom_Memory_Allocater",
     liveUrl: "",
     visualType: "memory-allocator",
-    // Optional screenshot path from public/images/projects/ (e.g. "/images/projects/allocator.png")
-    imageSrc: "",
+    // Screenshot path in public/images/projects/
+    imageSrc: "/images/projects/memory-allocator.png",
+    imageAlt: "Custom memory allocator project interface",
     isPlaceholder: false,
   },
   {
     id: "applied-ai-project",
     number: "03",
-    title: "Project 03 — In Development",
+    title: "Z-Flux - AI Finance Super App",
     description:
-      "A configurable placeholder for an upcoming AI/ML or full-stack software project. System architecture, algorithms, and technical benchmarks will be published upon initial release.",
+      "Z-Flux is a comprehensive AI-powered Finance Super App designed to unify the fragmented landscape of personal finance.",
     technologies: [
       "AI / ML",
       "Distributed Systems",
@@ -51,8 +52,9 @@ export const projects: Project[] = [
     repositoryUrl: "",
     liveUrl: "",
     visualType: "placeholder",
-    // Optional screenshot path from public/images/projects/
-    imageSrc: "",
+    // Screenshot path in public/images/projects/
+    imageSrc: "/images/projects/project-03.png",
+    imageAlt: "Project 03 interface screenshot",
     isPlaceholder: true,
   },
 ];

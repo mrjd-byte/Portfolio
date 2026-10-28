@@ -13,18 +13,16 @@ export default function Hero() {
 
           {/* Main Headline with intentional line breaks */}
           <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-[4.2rem] font-normal tracking-tight text-[#28251F] leading-[1.08]">
-            Building real-world
+            Understanding systems.
             <br />
-            systems. Learning
+            Connecting ideas.
             <br />
-            by building.
+
           </h1>
 
           {/* Supporting Paragraph */}
           <p className="mt-6 sm:mt-8 text-base sm:text-lg text-[#555047] leading-relaxed max-w-xl font-normal">
-            I enjoy exploring how things work, turning ideas into working
-            software, and understanding the systems, algorithms, and trade-offs
-            behind them.
+            I build real-world software and engineering-focused projects — exploring system internals, backend architecture, and the design decisions behind reliable, effective software.
           </p>
         </div>
 

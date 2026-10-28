@@ -688,6 +688,9 @@ function ExplodedScene({
   const cubeWireRef = useRef<THREE.Group>(null);
 
   useFrame((state, delta) => {
+    // Clamp delta to prevent extrapolation spikes when returning from inactive/hidden tabs
+    const safeDelta = Math.min(delta, 0.1);
+
     // Subtle mouse parallax damping
     if (rootGroupRef.current) {
       const targetRotY = state.pointer.x * 0.12;
@@ -695,12 +698,12 @@ function ExplodedScene({
       rootGroupRef.current.rotation.y = THREE.MathUtils.lerp(
         rootGroupRef.current.rotation.y,
         targetRotY,
-        delta * 2.5
+        safeDelta * 2.5
       );
       rootGroupRef.current.rotation.x = THREE.MathUtils.lerp(
         rootGroupRef.current.rotation.x,
         targetRotX,
-        delta * 2.5
+        safeDelta * 2.5
       );
     }
 
@@ -711,12 +714,12 @@ function ExplodedScene({
         laptopGroupRef.current.position.y = Math.sin(t * 0.8) * 0.05;
       }
       if (sphereRef.current) {
-        sphereRef.current.rotation.y += delta * 0.18;
-        sphereRef.current.rotation.x += delta * 0.08;
+        sphereRef.current.rotation.y += safeDelta * 0.18;
+        sphereRef.current.rotation.x += safeDelta * 0.08;
       }
       if (cubeWireRef.current) {
-        cubeWireRef.current.rotation.y += delta * 0.12;
-        cubeWireRef.current.rotation.z += delta * 0.06;
+        cubeWireRef.current.rotation.y += safeDelta * 0.12;
+        cubeWireRef.current.rotation.z += safeDelta * 0.06;
       }
     }
   });

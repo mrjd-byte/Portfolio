@@ -1,12 +1,108 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { Component, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { Canvas, useFrame } from "@react-three/fiber";
-import { OrthographicCamera } from "@react-three/drei";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 
 /**
- * CadBox: Box mesh with sharp CAD-style architectural wireframe edges
+ * Check if WebGL / WebGL2 is supported in the current browser session.
+ * Crucial: explicitly release the test context via WEBGL_lose_context
+ * so we do not exhaust the browser's limited WebGL context pool (8-16 contexts).
+ */
+function checkWebGLSupport(): boolean {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return false;
+  }
+  try {
+    const canvas = document.createElement("canvas");
+    const gl =
+      canvas.getContext("webgl2") ||
+      canvas.getContext("webgl") ||
+      canvas.getContext("experimental-webgl");
+
+    if (!gl) return false;
+
+    // Release context immediately to prevent leaking contexts
+    const loseContextExt = (gl as WebGLRenderingContext).getExtension(
+      "WEBGL_lose_context"
+    );
+    if (loseContextExt) {
+      loseContextExt.loseContext();
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * ErrorBoundary for WebGL / Three.js Canvas:
+ * If WebGL context creation fails or throws during initialization,
+ * catch the error and seamlessly render the static SVG fallback illustration.
+ */
+interface ErrorBoundaryProps {
+  fallback: React.ReactNode;
+  children: React.ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+}
+
+class WebGLCanvasErrorBoundary extends Component<
+  ErrorBoundaryProps,
+  ErrorBoundaryState
+> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.warn(
+      "[HeroIllustration] WebGL render error caught by boundary; using static fallback:",
+      error,
+      errorInfo
+    );
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+    return this.props.children;
+  }
+}
+
+/**
+ * ResponsiveCamera:
+ * Keeps the entire isometric exploded illustration perfectly framed across all viewport sizes.
+ * Scales zoom smoothly on mobile/tablet viewports (< 520px) to prevent scene edge clipping.
+ */
+function ResponsiveCamera() {
+  const { size, camera } = useThree();
+
+  useEffect(() => {
+    if (camera instanceof THREE.OrthographicCamera) {
+      // 520px+ width: zoom of 44 frames the complete composition with generous margins.
+      // Narrower viewports: scale zoom proportionally so the laptop, sphere, and cube remain visible.
+      const targetZoom = Math.min(44, Math.max(26, (size.width / 520) * 44));
+      camera.zoom = targetZoom;
+      camera.updateProjectionMatrix();
+    }
+  }, [size.width, size.height, camera]);
+
+  return null;
+}
+
+/**
+ * CadBox: Box mesh with sharp CAD-style architectural wireframe edges.
+ * Shares geometry between the solid mesh and wireframe lines, and disposes
+ * both on unmount to prevent GPU memory leaks.
  */
 interface CadBoxProps {
   args: [number, number, number];
@@ -29,15 +125,22 @@ function CadBox({
   position = [0, 0, 0],
   rotation = [0, 0, 0],
 }: CadBoxProps) {
-  const edgesGeo = useMemo(() => {
-    const geo = new THREE.BoxGeometry(...args);
-    return new THREE.EdgesGeometry(geo);
-  }, [args]);
+  const { boxGeo, edgesGeo } = useMemo(() => {
+    const bg = new THREE.BoxGeometry(...args);
+    const eg = new THREE.EdgesGeometry(bg);
+    return { boxGeo: bg, edgesGeo: eg };
+  }, [args[0], args[1], args[2]]);
+
+  useEffect(() => {
+    return () => {
+      boxGeo.dispose();
+      edgesGeo.dispose();
+    };
+  }, [boxGeo, edgesGeo]);
 
   return (
     <group position={position} rotation={rotation}>
-      <mesh castShadow receiveShadow>
-        <boxGeometry args={args} />
+      <mesh castShadow receiveShadow geometry={boxGeo}>
         <meshStandardMaterial
           color={color}
           roughness={roughness}
@@ -56,7 +159,8 @@ function CadBox({
 }
 
 /**
- * FloorGrid: Technical isometric floor lines with projection crosshairs
+ * FloorGrid: Technical isometric floor lines with projection crosshairs.
+ * Geometry is properly disposed on unmount.
  */
 function FloorGrid() {
   const gridLines = useMemo(() => {
@@ -75,6 +179,12 @@ function FloorGrid() {
     return geometry;
   }, []);
 
+  useEffect(() => {
+    return () => {
+      gridLines.dispose();
+    };
+  }, [gridLines]);
+
   return (
     <lineSegments geometry={gridLines}>
       <lineBasicMaterial color="#28251F" transparent opacity={0.12} />
@@ -83,7 +193,8 @@ function FloorGrid() {
 }
 
 /**
- * MotherboardScene: Exploded circuit board layer with CPU, RAM, and components
+ * MotherboardScene: Exploded circuit board layer with CPU, RAM, and components.
+ * Generates custom 2D canvas textures and disposes them on unmount.
  */
 function MotherboardScene() {
   // Procedural CPU Heatspreader texture with micro-traces and alignment triangle
@@ -134,7 +245,9 @@ function MotherboardScene() {
       ctx.textAlign = "center";
       ctx.fillText("CS · SILICON // 64B", 128, 134);
     }
-    return new THREE.CanvasTexture(canvas);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.needsUpdate = true;
+    return tex;
   }, []);
 
   // Procedural PCB trace texture
@@ -170,14 +283,44 @@ function MotherboardScene() {
         }
       }
     }
-    return new THREE.CanvasTexture(canvas);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.needsUpdate = true;
+    return tex;
   }, []);
+
+  // Dispose textures on unmount
+  useEffect(() => {
+    return () => {
+      cpuTexture?.dispose();
+      pcbTexture?.dispose();
+    };
+  }, [cpuTexture, pcbTexture]);
+
+  const { pcbBoxGeo, pcbEdgesGeo } = useMemo(() => {
+    const bg = new THREE.BoxGeometry(2.5, 0.12, 2.3);
+    const eg = new THREE.EdgesGeometry(bg);
+    return { pcbBoxGeo: bg, pcbEdgesGeo: eg };
+  }, []);
+
+  const { cpuBoxGeo, cpuEdgesGeo } = useMemo(() => {
+    const bg = new THREE.BoxGeometry(0.78, 0.06, 0.78);
+    const eg = new THREE.EdgesGeometry(bg);
+    return { cpuBoxGeo: bg, cpuEdgesGeo: eg };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      pcbBoxGeo.dispose();
+      pcbEdgesGeo.dispose();
+      cpuBoxGeo.dispose();
+      cpuEdgesGeo.dispose();
+    };
+  }, [pcbBoxGeo, pcbEdgesGeo, cpuBoxGeo, cpuEdgesGeo]);
 
   return (
     <group position={[0.1, -0.38, 0.2]}>
       {/* Sage Green PCB Substrate */}
-      <mesh castShadow receiveShadow position={[0, 0, 0]}>
-        <boxGeometry args={[2.5, 0.12, 2.3]} />
+      <mesh castShadow receiveShadow position={[0, 0, 0]} geometry={pcbBoxGeo}>
         <meshStandardMaterial
           color="#526654"
           map={pcbTexture || undefined}
@@ -186,12 +329,7 @@ function MotherboardScene() {
         />
       </mesh>
       {/* PCB CAD Edges */}
-      <lineSegments
-        geometry={useMemo(
-          () => new THREE.EdgesGeometry(new THREE.BoxGeometry(2.5, 0.12, 2.3)),
-          []
-        )}
-      >
+      <lineSegments geometry={pcbEdgesGeo}>
         <lineBasicMaterial color="#28251F" transparent opacity={0.4} />
       </lineSegments>
 
@@ -213,8 +351,7 @@ function MotherboardScene() {
 
       {/* CPU Processor Die with Heatspreader */}
       <group position={[0.1, 0.14, 0.1]}>
-        <mesh castShadow receiveShadow>
-          <boxGeometry args={[0.78, 0.06, 0.78]} />
+        <mesh castShadow receiveShadow geometry={cpuBoxGeo}>
           <meshStandardMaterial
             color="#22201C"
             map={cpuTexture || undefined}
@@ -222,13 +359,7 @@ function MotherboardScene() {
             metalness={0.3}
           />
         </mesh>
-        <lineSegments
-          geometry={useMemo(
-            () =>
-              new THREE.EdgesGeometry(new THREE.BoxGeometry(0.78, 0.06, 0.78)),
-            []
-          )}
-        >
+        <lineSegments geometry={cpuEdgesGeo}>
           <lineBasicMaterial color="#B0A696" transparent opacity={0.5} />
         </lineSegments>
       </group>
@@ -316,7 +447,8 @@ function MotherboardScene() {
 }
 
 /**
- * LaptopScene: Exploded floating laptop with terminal code display and keyboard deck
+ * LaptopScene: Exploded floating laptop with terminal code display and keyboard deck.
+ * Textures and geometries are properly disposed on unmount.
  */
 function LaptopScene() {
   // Screen canvas texture displaying code
@@ -368,7 +500,9 @@ function LaptopScene() {
       ctx.fillText("  }", 38, 310);
       ctx.fillText("}", 20, 332);
     }
-    return new THREE.CanvasTexture(canvas);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.needsUpdate = true;
+    return tex;
   }, []);
 
   // Keyboard deck texture with keys and trackpad
@@ -403,67 +537,145 @@ function LaptopScene() {
       ctx.lineWidth = 2;
       ctx.strokeRect(180, 252, 152, 88);
     }
-    return new THREE.CanvasTexture(canvas);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.needsUpdate = true;
+    return tex;
   }, []);
 
+  // Dispose textures on unmount
+  useEffect(() => {
+    return () => {
+      screenTexture?.dispose();
+      keyboardTexture?.dispose();
+    };
+  }, [screenTexture, keyboardTexture]);
+
+  // Geometries for Base, Hinge, and Display Lid
+  const {
+    kbBoxGeo,
+    kbEdgesGeo,
+    deckPlaneGeo,
+    lidBoxGeo,
+    lidEdgesGeo,
+    screenPlaneGeo,
+    screenEdgesGeo,
+    hingeCylGeo,
+  } = useMemo(() => {
+    const kbBg = new THREE.BoxGeometry(2.4, 0.06, 1.6);
+    const kbEg = new THREE.EdgesGeometry(kbBg);
+    const deckPg = new THREE.PlaneGeometry(2.3, 1.5);
+
+    const lidBg = new THREE.BoxGeometry(2.4, 1.5, 0.04);
+    const lidEg = new THREE.EdgesGeometry(lidBg);
+    const scrPg = new THREE.PlaneGeometry(2.28, 1.38);
+    const scrEg = new THREE.EdgesGeometry(scrPg);
+
+    const hCyl = new THREE.CylinderGeometry(0.035, 0.035, 2.1, 16);
+
+    return {
+      kbBoxGeo: kbBg,
+      kbEdgesGeo: kbEg,
+      deckPlaneGeo: deckPg,
+      lidBoxGeo: lidBg,
+      lidEdgesGeo: lidEg,
+      screenPlaneGeo: scrPg,
+      screenEdgesGeo: scrEg,
+      hingeCylGeo: hCyl,
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      kbBoxGeo.dispose();
+      kbEdgesGeo.dispose();
+      deckPlaneGeo.dispose();
+      lidBoxGeo.dispose();
+      lidEdgesGeo.dispose();
+      screenPlaneGeo.dispose();
+      screenEdgesGeo.dispose();
+      hingeCylGeo.dispose();
+    };
+  }, [
+    kbBoxGeo,
+    kbEdgesGeo,
+    deckPlaneGeo,
+    lidBoxGeo,
+    lidEdgesGeo,
+    screenPlaneGeo,
+    screenEdgesGeo,
+    hingeCylGeo,
+  ]);
+
   return (
-    <group position={[0.25, 1.15, 0.1]} rotation={[-0.05, -0.32, 0]}>
-      {/* Keyboard Base Chassis */}
+    // Laptop Assembly: Base is strictly horizontal (rotations x=0, z=0),
+    // yawed slightly (-0.22 rad / ~-12.6 deg) for an optimal 3/4 isometric view
+    <group position={[0.2, 1.15, 0.1]} rotation={[0, -0.22, 0]}>
+      {/* 1. Flat Horizontal Keyboard Base Chassis */}
       <group position={[0, 0, 0]}>
-        <mesh castShadow receiveShadow>
-          <boxGeometry args={[2.4, 0.08, 1.7]} />
+        {/* Solid graphite base slab */}
+        <mesh castShadow receiveShadow geometry={kbBoxGeo}>
           <meshStandardMaterial
-            color="#2A2824"
+            color="#262420"
+            roughness={0.7}
+            metalness={0.2}
+          />
+        </mesh>
+        {/* Architectural CAD edges */}
+        <lineSegments geometry={kbEdgesGeo}>
+          <lineBasicMaterial color="#DDD4C4" transparent opacity={0.35} />
+        </lineSegments>
+
+        {/* Top Keyboard Deck surface (facing upward, with keys at rear, trackpad at front) */}
+        <mesh position={[0, 0.031, 0]} rotation={[-Math.PI / 2, 0, 0]} geometry={deckPlaneGeo}>
+          <meshStandardMaterial
             map={keyboardTexture || undefined}
+            roughness={0.65}
+            metalness={0.15}
+          />
+        </mesh>
+      </group>
+
+      {/* 2. Display Assembly Pivoting at the Rear Hinge */}
+      {/* Hinge axis at the rear-top edge: z = -0.8, y = 0.03 */}
+      {/* Rotation: -0.32 rad (~ -18.3 deg) tilts the screen upright at ~108 deg open relative to base */}
+      <group position={[0, 0.03, -0.8]} rotation={[-0.32, 0, 0]}>
+        {/* Cylindrical Hinge Barrel connecting base and display */}
+        <mesh position={[0, 0, 0]} rotation={[0, 0, Math.PI / 2]} geometry={hingeCylGeo}>
+          <meshStandardMaterial
+            color="#1F1D19"
+            roughness={0.5}
+            metalness={0.4}
+          />
+        </mesh>
+
+        {/* Display Lid Rear Casing (stands upright from hinge y=0 to y=1.5) */}
+        <mesh castShadow receiveShadow position={[0, 0.75, -0.02]} geometry={lidBoxGeo}>
+          <meshStandardMaterial
+            color="#262420"
             roughness={0.65}
             metalness={0.25}
           />
         </mesh>
-        <lineSegments
-          geometry={useMemo(
-            () =>
-              new THREE.EdgesGeometry(new THREE.BoxGeometry(2.4, 0.08, 1.7)),
-            []
-          )}
-        >
-          <lineBasicMaterial color="#DDD4C4" transparent opacity={0.35} />
-        </lineSegments>
-      </group>
-
-      {/* Screen Display Lid (Tilted back ~112 degrees from base) */}
-      <group position={[0, 0.05, -0.85]} rotation={[-1.95, 0, 0]}>
-        {/* Lid Rear Casing */}
-        <mesh castShadow receiveShadow position={[0, 0.75, -0.025]}>
-          <boxGeometry args={[2.4, 1.5, 0.05]} />
-          <meshStandardMaterial
-            color="#282622"
-            roughness={0.65}
-            metalness={0.3}
-          />
-        </mesh>
-        <lineSegments
-          position={[0, 0.75, -0.025]}
-          geometry={useMemo(
-            () =>
-              new THREE.EdgesGeometry(new THREE.BoxGeometry(2.4, 1.5, 0.05)),
-            []
-          )}
-        >
+        <lineSegments position={[0, 0.75, -0.02]} geometry={lidEdgesGeo}>
           <lineBasicMaterial color="#DDD4C4" transparent opacity={0.35} />
         </lineSegments>
 
-        {/* Display Screen Surface */}
-        <mesh position={[0, 0.75, 0.005]}>
-          <planeGeometry args={[2.25, 1.35]} />
+        {/* Front-facing Display Screen Surface (faces viewer with subtle sage code lines) */}
+        <mesh position={[0, 0.75, 0.002]} geometry={screenPlaneGeo}>
           <meshBasicMaterial map={screenTexture || undefined} />
         </mesh>
+        {/* Subtle CAD inner bezel line */}
+        <lineSegments position={[0, 0.75, 0.003]} geometry={screenEdgesGeo}>
+          <lineBasicMaterial color="#7F8A7A" transparent opacity={0.3} />
+        </lineSegments>
       </group>
     </group>
   );
 }
 
 /**
- * ExplodedScene: Full 3D composition with animations, wireframes, and mouse tracking
+ * ExplodedScene: Full 3D composition with animations, wireframes, and mouse tracking.
+ * Animation uses performance.now() rather than deprecated THREE.Clock to keep console clean.
  */
 function ExplodedScene({
   prefersReducedMotion,
@@ -494,7 +706,7 @@ function ExplodedScene({
 
     // Harmonic floating hover animation
     if (!prefersReducedMotion) {
-      const t = state.clock.getElapsedTime();
+      const t = performance.now() * 0.001;
       if (laptopGroupRef.current) {
         laptopGroupRef.current.position.y = Math.sin(t * 0.8) * 0.05;
       }
@@ -521,9 +733,28 @@ function ExplodedScene({
     // Height measurement vertical ruler
     points.push(new THREE.Vector3(2.4, -1.35, 0.0));
     points.push(new THREE.Vector3(2.4, 1.8, 0.0));
-    const geo = new THREE.BufferGeometry().setFromPoints(points);
-    return geo;
+    return new THREE.BufferGeometry().setFromPoints(points);
   }, []);
+
+  useEffect(() => {
+    return () => {
+      projectionLines.dispose();
+    };
+  }, [projectionLines]);
+
+  // Wireframe box for floating cube cage
+  const { wireCubeGeo, wireEdgesGeo } = useMemo(() => {
+    const bg = new THREE.BoxGeometry(0.72, 0.72, 0.72);
+    const eg = new THREE.EdgesGeometry(bg);
+    return { wireCubeGeo: bg, wireEdgesGeo: eg };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      wireCubeGeo.dispose();
+      wireEdgesGeo.dispose();
+    };
+  }, [wireCubeGeo, wireEdgesGeo]);
 
   return (
     <group ref={rootGroupRef}>
@@ -590,13 +821,7 @@ function ExplodedScene({
       {/* Floating Wireframe Cube Cage with Inner Solid Cube to the upper left */}
       <group ref={cubeWireRef} position={[-1.7, 1.75, -0.5]}>
         {/* Outer wireframe box */}
-        <lineSegments
-          geometry={useMemo(
-            () =>
-              new THREE.EdgesGeometry(new THREE.BoxGeometry(0.72, 0.72, 0.72)),
-            []
-          )}
-        >
+        <lineSegments geometry={wireEdgesGeo}>
           <lineBasicMaterial color="#28251F" transparent opacity={0.45} />
         </lineSegments>
         {/* Inner solid mini-cube */}
@@ -622,8 +847,9 @@ function ExplodedScene({
 }
 
 /**
- * SvgIllustrationFallback: High-fidelity editorial isometric SVG drawing
- * Displays during SSR or if WebGL is unavailable.
+ * SvgIllustrationFallback: High-fidelity editorial isometric SVG drawing.
+ * Matches the warm cream (#F3EBDD), graphite (#28251F), and muted sage palette.
+ * Displays during SSR or if WebGL is unavailable / context lost.
  */
 function SvgIllustrationFallback() {
   return (
@@ -631,6 +857,7 @@ function SvgIllustrationFallback() {
       viewBox="0 0 600 520"
       className="w-full h-full select-none"
       fill="none"
+      preserveAspectRatio="xMidYMid meet"
       xmlns="http://www.w3.org/2000/svg"
       aria-label="Isometric technical exploded view illustration"
     >
@@ -905,6 +1132,9 @@ function SvgIllustrationFallback() {
 /**
  * Main HeroIllustration Component:
  * Embeds the 3D Canvas, technical annotation callouts, and fallback handling.
+ *
+ * Guarantees explicit responsive container sizing and clean lifecycle management
+ * to eliminate intermittent rendering.
  */
 export default function HeroIllustration() {
   const [mounted, setMounted] = useState(false);
@@ -913,32 +1143,29 @@ export default function HeroIllustration() {
 
   useEffect(() => {
     setMounted(true);
+    setHasWebGL(checkWebGLSupport());
 
-    // Detect WebGL capability
-    try {
-      const testCanvas = document.createElement("canvas");
-      const gl =
-        testCanvas.getContext("webgl") ||
-        testCanvas.getContext("experimental-webgl");
-      setHasWebGL(Boolean(gl));
-    } catch {
-      setHasWebGL(false);
-    }
-
-    // Detect prefers-reduced-motion
     if (typeof window !== "undefined") {
       const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
       setPrefersReducedMotion(mq.matches);
       const listener = (e: MediaQueryListEvent) =>
         setPrefersReducedMotion(e.matches);
-      mq.addEventListener("change", listener);
-      return () => mq.removeEventListener("change", listener);
+
+      if (mq.addEventListener) {
+        mq.addEventListener("change", listener);
+        return () => mq.removeEventListener("change", listener);
+      } else if (typeof (mq as unknown as { addListener: (l: (e: MediaQueryListEvent) => void) => void }).addListener === "function") {
+        (mq as unknown as { addListener: (l: (e: MediaQueryListEvent) => void) => void }).addListener(listener);
+        return () => {
+          (mq as unknown as { removeListener: (l: (e: MediaQueryListEvent) => void) => void }).removeListener(listener);
+        };
+      }
     }
   }, []);
 
   return (
     <div
-      className="relative w-full aspect-4/3 sm:aspect-5/4 lg:aspect-square max-w-[560px] mx-auto select-none"
+      className="relative w-full aspect-[4/3] sm:aspect-[5/4] lg:aspect-square min-h-[300px] sm:min-h-[380px] lg:min-h-[460px] max-w-[560px] mx-auto select-none"
       aria-label="3D architectural computer-system illustration"
     >
       {/* Technical Annotation Callouts (Editorial Notebook Style) */}
@@ -978,48 +1205,63 @@ export default function HeroIllustration() {
       </div>
 
       {/* Central 3D Canvas / WebGL Layer */}
-      <div className="w-full h-full">
+      <div className="absolute inset-0 w-full h-full overflow-hidden">
         {mounted && hasWebGL ? (
-          <Canvas
-            shadows
-            dpr={[1, 2]}
-            gl={{ antialias: true, alpha: true }}
-            className="w-full h-full cursor-grab active:cursor-grabbing"
-          >
-            {/* Orthographic Camera with True Isometric Perspective */}
-            <OrthographicCamera
-              makeDefault
-              position={[12, 10, 12]}
-              zoom={44}
-              near={-50}
-              far={100}
-            />
+          <WebGLCanvasErrorBoundary fallback={<SvgIllustrationFallback />}>
+            <Canvas
+              orthographic
+              camera={{
+                position: [12, 10, 12],
+                zoom: 44,
+                near: -50,
+                far: 100,
+              }}
+              shadows={{ type: THREE.PCFShadowMap }}
+              gl={{
+                antialias: true,
+                alpha: true,
+                powerPreference: "high-performance",
+              }}
+              className="w-full h-full block cursor-grab active:cursor-grabbing"
+              onCreated={({ gl, camera }) => {
+                camera.lookAt(0, 0, 0);
+                // Gracefully fallback to SVG if WebGL context is lost during session
+                gl.domElement.addEventListener("webglcontextlost", (event) => {
+                  event.preventDefault();
+                  console.warn("[HeroIllustration] WebGL context lost; falling back to static illustration");
+                  setHasWebGL(false);
+                });
+              }}
+            >
+              {/* Responsive Camera framing across viewport sizes */}
+              <ResponsiveCamera />
 
-            {/* Editorial Lighting */}
-            <ambientLight intensity={1.1} color="#F6EFE5" />
-            <directionalLight
-              position={[10, 15, 8]}
-              intensity={1.35}
-              color="#FFFDF9"
-              castShadow
-              shadow-mapSize={[1024, 1024]}
-              shadow-camera-near={1}
-              shadow-camera-far={40}
-              shadow-camera-left={-6}
-              shadow-camera-right={6}
-              shadow-camera-top={6}
-              shadow-camera-bottom={-6}
-            />
-            {/* Muted Sage Fill Light */}
-            <directionalLight
-              position={[-8, 6, -8]}
-              intensity={0.45}
-              color="#8CA38D"
-            />
+              {/* Editorial Lighting */}
+              <ambientLight intensity={1.1} color="#F6EFE5" />
+              <directionalLight
+                position={[10, 15, 8]}
+                intensity={1.35}
+                color="#FFFDF9"
+                castShadow
+                shadow-mapSize={[1024, 1024]}
+                shadow-camera-near={1}
+                shadow-camera-far={40}
+                shadow-camera-left={-6}
+                shadow-camera-right={6}
+                shadow-camera-top={6}
+                shadow-camera-bottom={-6}
+              />
+              {/* Muted Sage Fill Light */}
+              <directionalLight
+                position={[-8, 6, -8]}
+                intensity={0.45}
+                color="#8CA38D"
+              />
 
-            {/* 3D Exploded Scene */}
-            <ExplodedScene prefersReducedMotion={prefersReducedMotion} />
-          </Canvas>
+              {/* 3D Exploded Scene */}
+              <ExplodedScene prefersReducedMotion={prefersReducedMotion} />
+            </Canvas>
+          </WebGLCanvasErrorBoundary>
         ) : (
           /* High-Fidelity SVG Fallback during SSR or when WebGL is unavailable */
           <SvgIllustrationFallback />

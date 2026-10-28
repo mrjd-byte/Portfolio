@@ -8,7 +8,7 @@ export default function Hero() {
         <div className="lg:col-span-7 flex flex-col justify-center">
           {/* Monospace Topic Label */}
           <div className="font-mono text-xs sm:text-[13px] tracking-[0.22em] uppercase text-[#6E695F] mb-6 sm:mb-8 select-none">
-            COMPUTER SCIENCE · AI &amp; ML
+            COMPUTER SCIENCE · AI &amp; ML · SYSTEM DESIGN
           </div>
 
           {/* Main Headline with intentional line breaks */}

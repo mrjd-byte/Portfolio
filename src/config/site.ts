@@ -10,7 +10,8 @@ export const siteConfig: SiteConfig = {
   email: "jaibhev@example.com",
   githubUrl: "https://github.com/jaibhev",
   linkedInUrl: "https://linkedin.com/in/jaibhev",
-  resumeUrl: "/resume.pdf",
+  // Google Drive resume URL
+  resumeUrl: "https://drive.google.com/file/d/1zAE02ETobg6XRpmN3PpYOlf29gk8UeUj/view?usp=sharing",
   socials: {
     github: "https://github.com/jaibhev",
     linkedin: "https://linkedin.com/in/jaibhev",

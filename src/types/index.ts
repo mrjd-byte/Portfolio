@@ -20,3 +20,16 @@ export interface NavItem {
   href: string;
   external?: boolean;
 }
+
+export interface Project {
+  id: string;
+  number: string;
+  title: string;
+  description: string;
+  technologies: string[];
+  repositoryUrl?: string;
+  liveUrl?: string;
+  visualType: "debatehub" | "memory-allocator" | "placeholder" | string;
+  imageSrc?: string;
+  isPlaceholder?: boolean;
+}

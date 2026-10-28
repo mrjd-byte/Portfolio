@@ -7,10 +7,12 @@ export interface SiteConfig {
   year: number | string;
   email: string;
   githubUrl: string;
+  leetCodeUrl: string;
   linkedInUrl: string;
   resumeUrl: string;
   socials: {
     github: string;
+    leetcode?: string;
     linkedin: string;
   };
 }
